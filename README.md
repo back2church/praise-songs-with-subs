@@ -42,6 +42,12 @@ Alternatively: `npm start` (then open http://localhost:8080) and `npm test`
 for the unit tests (Node 20+). Don't open `index.html` directly from disk – the
 speech worker needs `http://`.
 
+## Online
+
+After merging to `main`, a GitHub Actions workflow runs the tests and publishes the app with
+GitHub Pages (`https://<owner>.github.io/praise-songs-with-subs/`). If the first deploy fails, enable
+*Settings → Pages → Source: GitHub Actions* once. The published site is public.
+
 ## Design
 
 | File | Role |
