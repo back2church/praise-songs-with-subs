@@ -29,15 +29,18 @@ Everything runs in the browser. The song never leaves the device.
 
 ## Run it
 
-No build step. Serve the folder with any static web server and open it in a
-current Chrome or Edge (Firefox works, Safari has limited export support):
+Needs [Node.js](https://nodejs.org) or Python installed, and a current Chrome or Edge
+(Firefox works, Safari has limited export support). No build step.
 
-```sh
-npm start          # python3 -m http.server 8080  →  http://localhost:8080
-npm test           # unit tests for parsing and alignment (Node 20+)
-```
+- **Windows:** double-click `start.bat`
+- **macOS:** double-click `start.command` (first time: right-click → Open)
+- **Linux:** run `./start.sh`
 
-It can also be hosted as-is on GitHub Pages.
+This starts a local server and opens the app in your browser. Close the window to stop it.
+
+Alternatively: `npm start` (then open http://localhost:8080) and `npm test`
+for the unit tests (Node 20+). Don't open `index.html` directly from disk – the
+speech worker needs `http://`.
 
 ## Design
 
