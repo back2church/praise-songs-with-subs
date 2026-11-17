@@ -10,6 +10,17 @@ export const PALETTES = {
   slate: { name: 'Calm grey', base: ['#0d1014', '#27303a'], accents: ['#6f8296', '#a8b7c4', '#4d5c6b'] },
 };
 
+/** Build a palette from two colours of your own (e.g. brand colours). */
+export function customPalette(a, b) {
+  const ok = (c) => /^#[0-9a-f]{6}$/i.test(c || '');
+  if (!ok(a) || !ok(b)) return PALETTES.ocean;
+  const blend = (x, y, k) => '#' + [16, 8, 0].map((sh) => {
+    const p = (parseInt(x.slice(1), 16) >> sh) & 255, q = (parseInt(y.slice(1), 16) >> sh) & 255;
+    return Math.round(p + (q - p) * k).toString(16).padStart(2, '0');
+  }).join('');
+  return { name: 'Own colours', base: [blend('#000000', a, 0.3), blend('#000000', b, 0.5)], accents: [a, b, blend(a, b, 0.5)] };
+}
+
 const TAU = Math.PI * 2;
 
 // Deterministic pseudo-random numbers so particles are stable between frames.
@@ -130,12 +141,68 @@ function stars(ctx, W, H, t, p) {
   }
 }
 
+// ----- Very calm themes: almost still, only slow changes of colour and light -----
+
+function mix(a, b, k) {
+  const x = parseInt(a.slice(1), 16), y = parseInt(b.slice(1), 16);
+  const ch = (sh) => Math.round(((x >> sh) & 255) + (((y >> sh) & 255) - ((x >> sh) & 255)) * k);
+  return `rgb(${ch(16)},${ch(8)},${ch(0)})`;
+}
+const hexOf = (rgb) => '#' + rgb.match(/\d+/g).map((v) => Number(v).toString(16).padStart(2, '0')).join('');
+/** Colour that wanders smoothly through a list, one step every `period` seconds. */
+function wander(colors, t, period, offset = 0) {
+  const x = t / period + offset;
+  const i = Math.floor(x) % colors.length;
+  const k = x - Math.floor(x);
+  return hexOf(mix(colors[i], colors[(i + 1) % colors.length], k * k * (3 - 2 * k)));
+}
+
+function gradient(ctx, W, H, t, p) {
+  // A two-colour gradient that turns very slowly while its colours drift.
+  const a = t * 0.02;
+  const cx = W / 2, cy = H / 2, r = Math.hypot(W, H) / 2;
+  const g = ctx.createLinearGradient(cx - Math.cos(a) * r, cy - Math.sin(a) * r, cx + Math.cos(a) * r, cy + Math.sin(a) * r);
+  const dark = (c) => hexOf(mix('#000000', c, 0.55));
+  g.addColorStop(0, p.base[0]);
+  g.addColorStop(0.55, wander([p.base[1], dark(p.accents[0]), dark(p.accents[2])], t, 40));
+  g.addColorStop(1, wander([dark(p.accents[2]), p.base[1], dark(p.accents[0])], t, 55, 0.5));
+  ctx.globalCompositeOperation = 'source-over';
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, W, H);
+}
+
+function mist(ctx, W, H, t, p) {
+  // Nearly still: two huge, faint glows that take minutes to cross the picture.
+  base(ctx, W, H, p, t * 0.3);
+  ctx.globalCompositeOperation = 'screen';
+  glow(ctx, W * (0.5 + 0.3 * Math.sin(t * 0.012)), H * (0.45 + 0.2 * Math.cos(t * 0.009)), Math.max(W, H) * 0.7, p.accents[0], 0.2);
+  glow(ctx, W * (0.5 - 0.3 * Math.sin(t * 0.01 + 1)), H * (0.6 + 0.2 * Math.sin(t * 0.013)), Math.max(W, H) * 0.6, p.accents[2], 0.16);
+}
+
+function breathe(ctx, W, H, t, p) {
+  // A centred glow that slowly swells and fades, like calm breathing.
+  base(ctx, W, H, p, 0);
+  ctx.globalCompositeOperation = 'screen';
+  const k = 0.5 + 0.5 * Math.sin(t * 0.25);
+  glow(ctx, W / 2, H * 0.55, Math.max(W, H) * (0.55 + 0.1 * k), wander(p.accents, t, 45), 0.14 + 0.14 * k);
+}
+
+function solid(ctx, W, H, t, p, bg) {
+  ctx.globalCompositeOperation = 'source-over';
+  ctx.fillStyle = /^#[0-9a-f]{6}$/i.test(bg.color || '') ? bg.color : '#000000';
+  ctx.fillRect(0, 0, W, H);
+}
+
 export const THEMES = {
   aurora: { name: 'Aurora glow', draw: aurora },
   bokeh: { name: 'Floating lights', draw: bokeh },
   rays: { name: 'Light rays', draw: rays },
   waves: { name: 'Gentle waves', draw: waves },
   stars: { name: 'Night sky', draw: stars },
+  gradient: { name: 'Slow gradient (very calm)', draw: gradient },
+  mist: { name: 'Soft mist (very calm)', draw: mist },
+  breathe: { name: 'Breathing light (very calm)', draw: breathe },
+  solid: { name: 'Plain colour (black)', draw: solid, plain: true },
 };
 
 /** Draw an image or video so it covers the canvas; still images get a slow zoom and pan. */
@@ -154,7 +221,7 @@ function drawCover(ctx, W, H, media, t, animate) {
 }
 
 /**
- * @param bg { theme, palette, media?: HTMLImageElement|HTMLVideoElement, dim: 0..1 }
+ * @param bg { theme, palette, color (for the plain theme), media?: HTMLImageElement|HTMLVideoElement, dim: 0..1 }
  */
 export function drawBackground(ctx, W, H, t, bg) {
   ctx.save();
@@ -166,7 +233,9 @@ export function drawBackground(ctx, W, H, t, bg) {
     ctx.fillRect(0, 0, W, H);
     drawn = drawCover(ctx, W, H, bg.media, t, !('videoWidth' in bg.media));
   }
-  if (!drawn) (THEMES[bg.theme] || THEMES.aurora).draw(ctx, W, H, t, PALETTES[bg.palette] || PALETTES.ocean);
+  const theme = THEMES[bg.theme] || THEMES.aurora;
+  if (!drawn) theme.draw(ctx, W, H, t, bg.custom || PALETTES[bg.palette] || PALETTES.ocean, bg);
+  if (!drawn && theme.plain) { ctx.restore(); return; } // a plain colour stays exactly that colour
   // Darken and vignette so white lyrics stay readable on any background.
   ctx.globalCompositeOperation = 'source-over';
   ctx.fillStyle = `rgba(0,0,0,${bg.dim})`;

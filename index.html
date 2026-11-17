@@ -82,11 +82,16 @@
         <button id="addCue">+ Line</button>
         <button id="addBlank">+ Break</button>
       </div>
-      <p class="muted">A line stays until the next one is sung. Line gone too late? Pause where it should end and add a <b>Break</b>. Gone too early? Delete the break after it or edit its time.</p>
+      <p class="muted">Click a line to jump to it. A line stays until the next one is sung: for an empty screen, pause where it should end and add a <b>Break</b>. Type <kbd>|</kbd> inside a line to force a line break there.</p>
     </section>
 
     <section>
       <h2><span>4</span> Look</h2>
+      <div class="row">
+        <select id="template" aria-label="Template"><option value="">Template…</option></select>
+        <button id="templateSave" class="narrow">Save as…</button>
+        <button id="templateDelete" class="narrow" disabled>Delete</button>
+      </div>
       <label class="slider">Next line appears ahead by <b id="leadValue">1.5 s</b>
         <input type="range" id="lead" min="0" max="3" step="0.1" value="1.5">
       </label>
@@ -105,12 +110,30 @@
         </label>
         <label>Font
           <select id="font">
-            <option value="system-ui, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif">Sans</option>
+            <option value="Inter, system-ui, sans-serif">Inter</option>
+            <option value="system-ui, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif">System sans</option>
             <option value="Georgia, 'Times New Roman', serif">Serif</option>
             <option value="'Trebuchet MS', Verdana, sans-serif">Rounded</option>
           </select>
         </label>
       </div>
+      <div class="grid">
+        <label>Text colour
+          <input type="color" id="textColor" value="#ffffff">
+        </label>
+        <label id="bgColorLabel">Background colour
+          <input type="color" id="bgColor" value="#000000">
+        </label>
+      </div>
+      <div class="grid" id="customColors">
+        <label>Own colour 1
+          <input type="color" id="customA" value="#1f7fbf">
+        </label>
+        <label>Own colour 2
+          <input type="color" id="customB" value="#0b2a4a">
+        </label>
+      </div>
+      <label class="check"><input type="checkbox" id="caps"> ALL CAPS</label>
       <label class="slider">Text size
         <input type="range" id="scale" min="0.6" max="1.5" step="0.05" value="1">
       </label>

@@ -144,3 +144,23 @@ test('alignLyrics does not invent repeats from a few stray words', () => {
   const words = sing([[5, 'holy holy holy'], [10, 'LORD GOD almighty'], [20, 'yeah oh holy yeah']]);
   assert.deepEqual(alignLyrics(lines, words).filter((c) => c.text).map((c) => c.text), lines);
 });
+
+import { breakLines, wrapText } from '../js/wrap.js';
+const measure = (w) => w.length; // 1 unit per character
+
+test('wrapping balances lines and breaks between phrases', () => {
+  assert.deepEqual(wrapText('Short line', measure, 30), ['Short line']);
+  // greedy filling would leave "Thee" alone on the second line
+  const two = wrapText('Early in the morning our song shall rise to Thee', measure, 44);
+  assert.equal(two.length, 2);
+  assert.ok(Math.abs(two[0].length - two[1].length) <= 8, two.join(' / '));
+  // prefers the comma over a perfectly even split
+  assert.deepEqual(wrapText('Holy, holy, holy, merciful and mighty', measure, 30), ['Holy, holy, holy,', 'merciful and mighty']);
+  // does not end a line on "the"
+  assert.ok(!/ (the|of|to)$/i.test(wrapText('We lift our voices to the King of all the earth', measure, 30)[0]));
+  // manual break with |
+  assert.deepEqual(wrapText('Holy | holy holy', measure, 30), ['Holy', 'holy holy']);
+  // never wider than allowed
+  for (const l of wrapText('GOD in three Persons blessed Trinity forever and ever amen amen', measure, 20)) assert.ok(l.length <= 20, l);
+  assert.deepEqual(breakLines(['Supercalifragilistic'], [20], 1, 10), ['Supercalifragilistic']);
+});

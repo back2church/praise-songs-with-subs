@@ -1,32 +1,17 @@
 import { activeIndex } from './lyrics.js';
 import { drawBackground } from './backgrounds.js';
+import { wrapText } from './wrap.js';
 
 const FADE_IN = 0.35;
 const FADE_OUT = 0.25;
 const clamp01 = (x) => Math.min(1, Math.max(0, x));
-
-function wrap(ctx, text, maxWidth) {
-  const out = [];
-  for (const para of text.split('\n')) {
-    let line = '';
-    for (const word of para.split(/\s+/).filter(Boolean)) {
-      const test = line ? line + ' ' + word : word;
-      if (line && ctx.measureText(test).width > maxWidth) {
-        out.push(line);
-        line = word;
-      } else line = test;
-    }
-    if (line) out.push(line);
-  }
-  return out;
-}
 
 /** Wrap text at full size (shrinking the font if it needs more than maxLines). */
 function layout(ctx, W, H, text, { size, font, weight = 600, maxLines = 3 }) {
   let lines;
   for (;;) {
     ctx.font = `${weight} ${size}px ${font}`;
-    lines = wrap(ctx, text, W * 0.84);
+    lines = wrapText(text, (w) => ctx.measureText(w).width, W * 0.8);
     if (lines.length <= maxLines || size < H * 0.03) break;
     size *= 0.9;
   }
@@ -34,7 +19,7 @@ function layout(ctx, W, H, text, { size, font, weight = 600, maxLines = 3 }) {
 }
 
 /** Paint a layout centred on (W/2, cy), optionally scaled down (so previews wrap exactly like the full line). */
-function paint(ctx, W, block, cy, alpha, scale = 1) {
+function paintBlock(ctx, W, block, cy, alpha, scale = 1, color = '#ffffff') {
   if (alpha <= 0.003) return;
   ctx.save();
   ctx.translate(W / 2, cy);
@@ -42,10 +27,14 @@ function paint(ctx, W, block, cy, alpha, scale = 1) {
   ctx.font = block.font;
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
-  ctx.shadowColor = 'rgba(0,0,0,0.55)';
-  ctx.shadowBlur = block.size * 0.22 * scale;
-  ctx.shadowOffsetY = block.size * 0.04 * scale;
-  ctx.fillStyle = `rgba(255,255,255,${Math.min(1, alpha)})`;
+  const n = parseInt(color.slice(1), 16);
+  const [r, g, b] = [n >> 16, (n >> 8) & 255, n & 255];
+  if (0.299 * r + 0.587 * g + 0.114 * b > 110) { // soft shadow keeps light text readable
+    ctx.shadowColor = 'rgba(0,0,0,0.55)';
+    ctx.shadowBlur = block.size * 0.22 * scale;
+    ctx.shadowOffsetY = block.size * 0.04 * scale;
+  }
+  ctx.fillStyle = `rgba(${r},${g},${b},${Math.min(1, alpha)})`;
   block.lines.forEach((l, i) => ctx.fillText(l, 0, (i + 0.5) * block.lh - block.height / 2));
   ctx.restore();
 }
@@ -79,7 +68,7 @@ const hasNextTime = (c) => !!(c && c.t != null);
  *   time: media time in seconds, bgTime: animation clock in seconds,
  *   cues, lead,
  *   bg: { theme, palette, media, dim },
- *   style: { font, scale, position: 'center'|'lower', showNext, singCue },
+ *   style: { font, scale, position: 'center'|'lower', showNext, singCue, caps, color },
  *   title, subtitle
  * }
  */
@@ -90,7 +79,10 @@ export function drawFrame(ctx, W, H, s) {
   const size = H * 0.078 * style.scale;
   const cy = style.position === 'lower' ? H * 0.68 : H * 0.5;
   const gap = size * 0.35;
-  const block = (cue) => layout(ctx, W, H, cue.text, { size, font: style.font });
+  const tx = (text) => (style.caps ? text.toLocaleUpperCase() : text);
+  const color = /^#[0-9a-f]{6}$/i.test(style.color || '') ? style.color : '#ffffff';
+  const block = (cue) => layout(ctx, W, H, tx(cue.text), { size, font: style.font });
+  const paint = (c, w, blk, y, alpha, scale = 1) => paintBlock(c, w, blk, y, alpha, scale, color);
   const previewY = (above, own) => cy + above.height / 2 + gap + (own.height * PREVIEW_SCALE) / 2;
 
   const i = activeIndex(cues, t);
@@ -102,7 +94,7 @@ export function drawFrame(ctx, W, H, s) {
   if (i < 0 && s.title) {
     const firstT = hasNextTime(cues[0]) ? cues[0].t : Infinity;
     const a = Math.min(clamp01(t / 0.8), clamp01((firstT - lead - t) / 0.6));
-    const tb = layout(ctx, W, H, s.title, { size: size * 1.15, font: style.font, weight: 700, maxLines: 2 });
+    const tb = layout(ctx, W, H, tx(s.title), { size: size * 1.15, font: style.font, weight: 700, maxLines: 2 });
     paint(ctx, W, tb, H * 0.47, a);
     if (s.subtitle) {
       const sb = layout(ctx, W, H, s.subtitle, { size: size * 0.45, font: style.font, weight: 400, maxLines: 2 });
