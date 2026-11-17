@@ -19,8 +19,10 @@ Everything runs in the browser. The song never leaves the device.
      your lyrics to the recording. Without lyrics it writes them from what it hears
      (proofread!). The model (~40–250 MB) is downloaded once and cached.
    - Edit any time by hand, or shift everything by ±0.1 / ±0.5 s.
-4. **Look** – lead time (0–3 s, default 1.5 s), animated background and colours,
-   font, size, position, or your own background image / video.
+4. **Look** – lead time (0–3 s, default 1.5 s), background (animated, very calm,
+   plain colour such as black, or your own image / video), colour set or two colours
+   of your own, text colour, font (Inter is built in), ALL CAPS, size and position.
+   Save any look as a named **template** (kept in this browser) and re-apply it later.
 5. **Show & export** – present fullscreen, or export a video file
    (MP4 where the browser supports it, otherwise WebM; recorded in real time).
    Timing can be saved as `.lrc` (reload it later) or as `.srt` subtitles.
@@ -50,6 +52,12 @@ Lyric sheets usually print the chorus once. Two ways to get the repeats:
 
 - **Auto-sync** finds repeats by itself: when the singer returns to lines that the
   sheet lists only once, those lines are added again at the right time.
+
+### Long lines
+
+Long lines are wrapped into balanced rows that break between phrases (after a
+comma, before "and", never right after "the"). Type `|` inside a line to force
+a break at that spot.
 
 ### When lines are shown
 
@@ -89,12 +97,18 @@ GitHub Pages (`https://<owner>.github.io/praise-songs-with-subs/`). If the first
 | --- | --- |
 | `js/lyrics.js` | Cue model, LRC/SRT/VTT/plain parsing, export, lyrics-to-speech alignment |
 | `js/backgrounds.js` | Procedural animated backgrounds (pure functions of time) |
+| `js/wrap.js` | Balanced, phrase-aware line breaking |
 | `js/renderer.js` | Draws one frame: background + lyrics shown `lead` seconds early |
 | `js/transcribe-worker.js` | Whisper (transformers.js) in a web worker |
 | `js/app.js` | UI, tap-sync, fullscreen, recording via `MediaRecorder` |
 
 Preview, fullscreen and export all draw the same canvas, so the exported video
 is exactly what you see.
+
+## Fonts
+
+Inter is bundled in `fonts/` (SIL Open Font License, see `fonts/LICENSE-Inter.txt`), so no
+font is loaded from another server.
 
 ## Copyright note
 

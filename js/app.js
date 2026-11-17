@@ -1,5 +1,5 @@
 import { parseLyrics, parseLrcMeta, parseTime, formatTime, activeIndex, toLrc, toSrt, alignLyrics, wordsToCues } from './lyrics.js';
-import { THEMES, PALETTES } from './backgrounds.js';
+import { THEMES, PALETTES, customPalette } from './backgrounds.js';
 import { drawFrame } from './renderer.js';
 
 const $ = (id) => document.getElementById(id);
@@ -20,15 +20,19 @@ const state = {
 
 // ---------- Settings (remembered between visits) ----------
 
-const SETTINGS = ['lead', 'theme', 'palette', 'position', 'font', 'scale', 'dim', 'singCue', 'showNext', 'language', 'model', 'resolution'];
+const LOOK = ['lead', 'theme', 'palette', 'position', 'font', 'scale', 'dim', 'singCue', 'showNext', 'caps', 'textColor', 'bgColor', 'customA', 'customB'];
+const SETTINGS = [...LOOK, 'language', 'model', 'resolution'];
 
 for (const [key, t] of Object.entries(THEMES)) $('theme').add(new Option(t.name, key));
 for (const [key, p] of Object.entries(PALETTES)) $('palette').add(new Option(p.name, key));
+$('palette').add(new Option('Own colours…', 'custom'));
 
-function loadSettings() {
-  let saved = {};
-  try { saved = JSON.parse(localStorage.getItem('psws-settings') || '{}'); } catch { /* storage unavailable */ }
-  for (const id of SETTINGS) {
+function readStore(key) {
+  try { return JSON.parse(localStorage.getItem(key) || '{}') || {}; } catch { return {}; } // storage unavailable
+}
+
+function applySettings(saved, ids) {
+  for (const id of ids) {
     const el = $(id);
     if (!(id in saved)) continue;
     if (el.type === 'checkbox') el.checked = !!saved[id];
@@ -36,14 +40,50 @@ function loadSettings() {
   }
 }
 
+const loadSettings = () => applySettings(readStore('psws-settings'), SETTINGS);
+const currentValues = (ids) => Object.fromEntries(ids.map((id) => [id, $(id).type === 'checkbox' ? $(id).checked : $(id).value]));
+
 function saveSettings() {
-  const out = {};
-  for (const id of SETTINGS) out[id] = $(id).type === 'checkbox' ? $(id).checked : $(id).value;
-  try { localStorage.setItem('psws-settings', JSON.stringify(out)); } catch { /* storage unavailable */ }
+  try { localStorage.setItem('psws-settings', JSON.stringify(currentValues(SETTINGS))); } catch { /* storage unavailable */ }
 }
 
 loadSettings();
 for (const id of SETTINGS) $(id).addEventListener('input', () => { saveSettings(); refresh(); });
+
+// ---------- Templates: named sets of the "Look" settings, kept in this browser ----------
+
+function renderTemplates(selected = '') {
+  const sel = $('template');
+  sel.length = 1;
+  for (const name of Object.keys(readStore('psws-templates')).sort()) sel.add(new Option(name, name));
+  sel.value = selected;
+  $('templateDelete').disabled = !sel.value;
+}
+
+$('template').addEventListener('change', () => {
+  const tpl = readStore('psws-templates')[$('template').value];
+  if (tpl) { applySettings(tpl, LOOK); saveSettings(); }
+  $('templateDelete').disabled = !$('template').value;
+  refresh();
+});
+
+$('templateSave').addEventListener('click', () => {
+  const name = (prompt('Name for this template (an existing name is overwritten):', $('template').value || '') || '').trim();
+  if (!name) return;
+  const all = readStore('psws-templates');
+  all[name] = currentValues(LOOK);
+  try { localStorage.setItem('psws-templates', JSON.stringify(all)); } catch { return setStatus('Templates cannot be saved in this browser (storage is blocked).', true); }
+  renderTemplates(name);
+});
+
+$('templateDelete').addEventListener('click', () => {
+  const all = readStore('psws-templates');
+  delete all[$('template').value];
+  try { localStorage.setItem('psws-templates', JSON.stringify(all)); } catch { /* storage unavailable */ }
+  renderTemplates();
+});
+
+renderTemplates();
 
 // ---------- Helpers ----------
 
@@ -94,6 +134,10 @@ function refresh() {
   $('recBadge').hidden = !rec;
   $('bgClear').hidden = !state.bgMedia;
   $('play').textContent = media.paused ? '▶' : '❚❚';
+  const plain = $('theme').value === 'solid' && !state.bgMedia;
+  $('bgColorLabel').style.visibility = plain ? 'visible' : 'hidden';
+  $('palette').disabled = $('dim').disabled = plain;
+  $('customColors').hidden = plain || $('palette').value !== 'custom';
 }
 
 // ---------- Song ----------
@@ -165,12 +209,15 @@ function renderCues() {
   shownCurrent = -2;
   state.cues.forEach((cue, i) => {
     const li = document.createElement('li');
-    const time = Object.assign(document.createElement('input'), { className: 'time', value: formatTime(cue.t), placeholder: '–:––', title: 'Start time (click to jump there)' });
+    const time = Object.assign(document.createElement('input'), { className: 'time', value: formatTime(cue.t), placeholder: '–:––', title: 'Start time' });
     const text = Object.assign(document.createElement('input'), { value: cue.text, placeholder: '(break – empty screen)' });
     const del = Object.assign(document.createElement('button'), { textContent: '×', title: 'Delete line' });
     time.setAttribute('aria-label', `Start time of line ${i + 1}`);
     text.setAttribute('aria-label', `Text of line ${i + 1}`);
-    time.addEventListener('click', () => { if (cue.t != null && !state.recorder) media.currentTime = cue.t; });
+    // Clicking anywhere on a line jumps the song to it.
+    li.addEventListener('click', (e) => {
+      if (e.target !== del && cue.t != null && state.file && !state.recorder && !state.tap) media.currentTime = cue.t;
+    });
     time.addEventListener('change', () => {
       cue.t = time.value.trim() === '' ? null : parseTime(time.value);
       sortCues();
@@ -454,8 +501,8 @@ function frame() {
     bgTime: performance.now() / 1000,
     cues: state.cues,
     lead,
-    bg: { theme: $('theme').value, palette: $('palette').value, media: state.bgMedia || (useSource ? media : null), dim: Number($('dim').value) },
-    style: { font: $('font').value, scale: Number($('scale').value), position: $('position').value, showNext: $('showNext').checked, singCue: $('singCue').checked },
+    bg: { theme: $('theme').value, palette: $('palette').value, color: $('bgColor').value, custom: $('palette').value === 'custom' ? customPalette($('customA').value, $('customB').value) : null, media: state.bgMedia || (useSource ? media : null), dim: Number($('dim').value) },
+    style: { font: $('font').value, scale: Number($('scale').value), position: $('position').value, showNext: $('showNext').checked, singCue: $('singCue').checked, caps: $('caps').checked, color: $('textColor').value },
     title: $('title').value.trim(),
     subtitle: $('subtitle').value.trim(),
   });
@@ -474,5 +521,6 @@ function frame() {
   requestAnimationFrame(frame);
 }
 
+for (const w of [400, 600, 700]) document.fonts?.load(`${w} 40px Inter`).catch(() => {});
 refresh();
 requestAnimationFrame(frame);
