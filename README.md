@@ -10,7 +10,7 @@ Everything runs in the browser. The song never leaves the device.
 ## How it works
 
 1. **Song** – choose an audio or video file (MP3, M4A, WAV, MP4, …).
-2. **Lyrics** – paste the text (one line per screen, written out as sung) or load a
+2. **Lyrics** – paste the text (one line per screen) or load a
    `.txt`, `.lrc`, `.srt` or `.vtt` file. Timestamps are used if present.
 3. **Timing** – three ways:
    - *Tap along*: play the song and press <kbd>Space</kbd> when each line starts
@@ -20,12 +20,47 @@ Everything runs in the browser. The song never leaves the device.
      (proofread!). The model (~40–250 MB) is downloaded once and cached.
    - Edit any time by hand, or shift everything by ±0.1 / ±0.5 s.
 4. **Look** – lead time (0–3 s, default 1.5 s), animated background and colours,
-   font, size, position, optional next-line preview, or your own background
-   image / video.
+   font, size, position, or your own background image / video.
 5. **Show & export** – present fullscreen, or export a video file
    (MP4 where the browser supports it, otherwise WebM; recorded in real time).
-   Timing can be saved as `.lrc` (reload it later) or as `.srt` subtitles that
-   already include the lead time.
+   Timing can be saved as `.lrc` (reload it later) or as `.srt` subtitles.
+
+### Repeated sections
+
+Lyric sheets usually print the chorus once. Two ways to get the repeats:
+
+- **Labels in the text.** A label line (`Chorus`, `[Chorus]`, `Verse 2:`, `Bridge`,
+  `Refrain`, `Strophe 1`, or anything in `[brackets]`) names the lines below it and is
+  not shown. The same label again, with nothing under it, repeats that section.
+  `x2` / `(2x)` after a label or at the end of a line repeats it.
+
+  ```
+  Verse 1
+  Holy, holy, holy
+  LORD GOD Almighty
+
+  Chorus
+  Worthy is the Lamb x2
+
+  Verse 2
+  …
+
+  Chorus x2
+  ```
+
+- **Auto-sync** finds repeats by itself: when the singer returns to lines that the
+  sheet lists only once, those lines are added again at the right time.
+
+### When lines are shown
+
+A line is on screen for as long as it is sung – until the next line starts. The
+lead time only controls how early the *next* line appears: below the current
+line, smaller and dimmer, then it moves up when it is sung. After a break the
+next line appears in the main position, slightly dimmed until it is sung.
+
+A line followed by more than 15 s without lyrics leaves by itself after a few
+seconds. For exact control add a **Break** (empty cue) where the line should
+disappear.
 
 ## Run it
 

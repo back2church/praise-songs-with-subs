@@ -29,7 +29,7 @@
 
     <section>
       <h2><span>2</span> Lyrics</h2>
-      <textarea id="lyricsText" rows="7" placeholder="Paste the lyrics here, one line per screen, written out as sung (repeat the chorus).&#10;&#10;Or load a .txt, .lrc, .srt or .vtt file – timestamps are used if present."></textarea>
+      <textarea id="lyricsText" rows="9" placeholder="Paste the lyrics, one line per screen.&#10;&#10;Repeats: label a section, then write the label again to repeat it:&#10;&#10;Chorus&#10;Holy, holy, holy&#10;LORD GOD Almighty&#10;&#10;Verse 2&#10;…&#10;&#10;Chorus x2&#10;&#10;“x2” after a line repeats that line. Auto-sync also finds repeats by itself.&#10;Or load a .txt, .lrc, .srt or .vtt file."></textarea>
       <div class="row">
         <label class="btn">Load file<input type="file" id="lyricsFile" accept=".txt,.lrc,.srt,.vtt,text/plain" hidden></label>
         <button id="applyLyrics" class="primary">Use these lyrics</button>
@@ -82,11 +82,12 @@
         <button id="addCue">+ Line</button>
         <button id="addBlank">+ Break</button>
       </div>
+      <p class="muted">A line stays until the next one is sung. Line gone too late? Pause where it should end and add a <b>Break</b>. Gone too early? Delete the break after it or edit its time.</p>
     </section>
 
     <section>
       <h2><span>4</span> Look</h2>
-      <label class="slider">Lyrics appear ahead by <b id="leadValue">1.5 s</b>
+      <label class="slider">Next line appears ahead by <b id="leadValue">1.5 s</b>
         <input type="range" id="lead" min="0" max="3" step="0.1" value="1.5">
       </label>
       <div class="grid">
@@ -116,8 +117,8 @@
       <label class="slider">Darken background
         <input type="range" id="dim" min="0" max="0.7" step="0.05" value="0.2">
       </label>
-      <label class="check"><input type="checkbox" id="singCue" checked> Brighten line when it is sung</label>
-      <label class="check"><input type="checkbox" id="showNext"> Preview next line</label>
+      <label class="check"><input type="checkbox" id="singCue" checked> After a break: brighten line when it is sung</label>
+      <label class="check"><input type="checkbox" id="showNext"> Always show the next line</label>
       <div class="row">
         <label class="btn">Own background image / video<input type="file" id="bgFile" accept="image/*,video/*" hidden></label>
         <button id="bgClear" hidden>Remove</button>

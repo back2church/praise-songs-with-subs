@@ -150,7 +150,7 @@ function applyLyrics() {
   const meta = parseLrcMeta(text);
   if (meta.ti && !$('title').value) $('title').value = meta.ti;
   if (meta.ar && !$('subtitle').value) $('subtitle').value = meta.ar;
-  setStatus(timed ? `${cues.filter((c) => c.text).length} timed lines loaded.` : `${cues.length} lines loaded. Now set the timing: tap along or auto-sync.`);
+  setStatus(timed ? `${cues.filter((c) => c.text).length} timed lines loaded.` : `${cues.length} lines loaded (repeats written out). Now set the timing: tap along or auto-sync.`);
   renderCues();
   refresh();
 }
@@ -320,7 +320,8 @@ $('autoSync').addEventListener('click', async () => {
       const cues = alignLyrics(lines, words);
       if (cues.every((c) => c.t == null)) throw new Error('The lyrics do not seem to match what is sung. Check the text or use “Tap along”.');
       state.cues = cues;
-      setStatus('Timing found. Play it back to check – every time can be edited, or re-tap single passages.');
+      const extra = cues.filter((c) => c.text).length - lines.length;
+      setStatus(`Timing found${extra > 0 ? `, including ${extra} repeated line${extra > 1 ? 's' : ''} that the sheet lists only once` : ''}. Play it back to check – every time can be edited.`);
     } else {
       state.cues = wordsToCues(words);
       $('lyricsText').value = state.cues.filter((c) => c.text).map((c) => c.text).join('\n');
@@ -463,7 +464,7 @@ function frame() {
     if (document.activeElement !== $('seek')) $('seek').value = time;
     $('clock').textContent = `${formatTime(time, 0)} / ${formatTime(media.duration || 0, 0)}`;
   }
-  highlight(activeIndex(state.cues, time + lead));
+  highlight(activeIndex(state.cues, time));
   if (state.tap) {
     const cue = state.cues[state.tap.index];
     $('tapNext').hidden = false;

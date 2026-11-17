@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { parseLyrics, parseTime, formatTime, activeIndex, toLrc, toSrt, alignLyrics, wordsToCues, parseLrcMeta } from '../js/lyrics.js';
+import { expandSections, parseLyrics, parseTime, formatTime, activeIndex, toLrc, toSrt, alignLyrics, wordsToCues, parseLrcMeta } from '../js/lyrics.js';
 
 test('parseTime / formatTime', () => {
   assert.equal(parseTime('1:02.50'), 62.5);
@@ -42,7 +42,7 @@ test('LRC round trip and SRT export with lead', () => {
   const cues = [{ t: 10, text: 'One' }, { t: 14, text: '' }, { t: 20, text: 'Two' }];
   assert.deepEqual(parseLyrics(toLrc(cues, { ti: 'T' })).cues, cues);
   const srt = toSrt(cues, 1.5, 24);
-  assert.match(srt, /1\n00:00:08,500 --> 00:00:12,500\nOne/);
+  assert.match(srt, /1\n00:00:08,500 --> 00:00:14,000\nOne/);
   assert.match(srt, /2\n00:00:18,500 --> 00:00:24,000\nTwo/);
 });
 
@@ -83,4 +83,64 @@ test('wordsToCues breaks on pauses and length', () => {
   ];
   const cues = wordsToCues(words).filter((c) => c.text);
   assert.deepEqual(cues.map((c) => [c.t, c.text]), [[1, 'Holy holy'], [3, 'LORD']]);
+});
+
+test('section labels, repeated sections and x2', () => {
+  const sheet = `Verse 1
+v1 a
+v1 b
+
+[Chorus]
+c a
+c b x2
+
+Verse 2:
+v2 a
+
+Chorus
+
+Bridge (x2)
+b a
+
+chorus x2`;
+  assert.deepEqual(expandSections(sheet), [
+    'v1 a', 'v1 b', 'c a', 'c b', 'c b', 'v2 a', 'c a', 'c b', 'c b', 'b a', 'b a',
+    'c a', 'c b', 'c b', 'c a', 'c b', 'c b',
+  ]);
+  assert.equal(parseLyrics(sheet).cues.length, 17);
+});
+
+function sing(parts) { // [[startTime, 'words words'], ...] -> recognised words
+  const words = [];
+  for (const [start, text] of parts) text.split(' ').forEach((w, k) => words.push({ text: w, start: start + k * 0.5, end: start + k * 0.5 + 0.4 }));
+  return words;
+}
+
+test('alignLyrics repeats a chorus that is written once but sung three times', () => {
+  const lines = [
+    'Amazing grace how sweet the sound', 'That saved a wretch like me',
+    'Praise the LORD oh my soul', 'Worship His holy name',
+    'Through many dangers toils and snares', 'I have already come',
+  ];
+  const [v1a, v1b, c1, c2, v2a, v2b] = lines;
+  const words = sing([[10, v1a], [15, v1b], [20, c1], [25, c2], [30, v2a], [35, v2b], [40, c1], [45, c2], [50, c1], [55, c2]]);
+  const cues = alignLyrics(lines, words).filter((c) => c.text);
+  assert.deepEqual(cues.map((c) => c.text), [v1a, v1b, c1, c2, v2a, v2b, c1, c2, c1, c2]);
+  assert.deepEqual(cues.map((c) => Math.round(c.t)), [10, 15, 20, 25, 30, 35, 40, 45, 50, 55]);
+});
+
+test('alignLyrics jumps forward to a later verse after a repeated chorus and keeps unsung lines', () => {
+  const lines = ['first verse line one here', 'chorus of praise we sing', 'second verse line two there', 'never sung closing words today'];
+  const [v1, c, v2, x] = lines;
+  const words = sing([[5, v1], [10, c], [15, c], [20, v2], [25, c]]);
+  const cues = alignLyrics(lines, words).filter((k) => k.text);
+  assert.deepEqual(cues.slice(0, 4).map((k) => [k.text, Math.round(k.t)]), [[v1, 5], [c, 10], [c, 15], [v2, 20]]);
+  assert.equal(cues.filter((k) => k.text === c).length, 3);
+  assert.equal(cues.filter((k) => k.text === x).length, 1);
+});
+
+test('alignLyrics does not invent repeats from a few stray words', () => {
+  const lines = ['holy holy holy', 'LORD GOD almighty'];
+  const words = sing([[5, 'holy holy holy'], [10, 'LORD GOD almighty'], [20, 'yeah oh holy yeah']]);
+  assert.deepEqual(alignLyrics(lines, words).filter((c) => c.text).map((c) => c.text), lines);
 });
