@@ -68,7 +68,7 @@ const hasNextTime = (c) => !!(c && c.t != null);
  *   time: media time in seconds, bgTime: animation clock in seconds,
  *   cues, lead,
  *   bg: { theme, palette, media, dim },
- *   style: { font, scale, position: 'center'|'lower', showNext, singCue, caps, color },
+ *   style: { font, scale, position: 'upper'|'center'|'lower', showNext, singCue, caps, color },
  *   title, subtitle
  * }
  */
@@ -77,7 +77,7 @@ export function drawFrame(ctx, W, H, s) {
 
   const { cues, lead, style, time: t } = s;
   const size = H * 0.078 * style.scale;
-  const cy = style.position === 'lower' ? H * 0.68 : H * 0.5;
+  const cy = { upper: H * 0.3, lower: H * 0.68 }[style.position] ?? H * 0.5;
   const gap = size * 0.35;
   const tx = (text) => (style.caps ? text.toLocaleUpperCase() : text);
   const color = /^#[0-9a-f]{6}$/i.test(style.color || '') ? style.color : '#ffffff';

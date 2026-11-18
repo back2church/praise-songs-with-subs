@@ -14,14 +14,21 @@ Everything runs in the browser. The song never leaves the device.
    `.txt`, `.lrc`, `.srt` or `.vtt` file. Timestamps are used if present.
 3. **Timing** – three ways:
    - *Tap along*: play the song and press <kbd>Space</kbd> when each line starts
-     (<kbd>B</kbd> = empty screen for instrumentals, <kbd>⌫</kbd> = step back).
+     (<kbd>B</kbd> = empty screen for instrumentals, <kbd>S</kbd> = skip a line that
+     is not sung, <kbd>⌫</kbd> = step back, <kbd>Esc</kbd> = stop). If the song
+     repeats a chorus or bridge that the text has only once, press its number
+     (<kbd>1</kbd>–<kbd>9</kbd>) or click its button to insert it before the next line.
    - *Auto-sync (AI)*: Whisper speech recognition runs in the browser and matches
      your lyrics to the recording. Without lyrics it writes them from what it hears
-     (proofread!). The model (~40–250 MB) is downloaded once and cached.
-   - Edit any time by hand, or shift everything by ±0.1 / ±0.5 s.
+     (proofread!). The model is downloaded once and cached.
+   - *Fix by hand*: pause where a line should start and click ⏱ on it, or type its
+     time. With "Changing a time moves all following lines too" (on by default) all
+     later lines keep their spacing, so one correction fixes the rest of the song.
+     "Shift all" moves every line by ±0.1 / ±0.5 s.
 4. **Look** – lead time (0–3 s, default 1.5 s), background (animated, very calm,
    plain colour such as black, or your own image / video), colour set or two colours
-   of your own, text colour, font (Inter is built in), ALL CAPS, size and position.
+   of your own, text colour, font (12 free fonts built in), ALL CAPS, size and
+   position (upper third, centre, lower third).
    Save any look as a named **template** (kept in this browser) and re-apply it later.
 5. **Show & export** – present fullscreen, or export a video file
    (MP4 where the browser supports it, otherwise WebM; recorded in real time).
@@ -107,8 +114,9 @@ is exactly what you see.
 
 ## Fonts
 
-Inter is bundled in `fonts/` (SIL Open Font License, see `fonts/LICENSE-Inter.txt`), so no
-font is loaded from another server.
+Built in, self-hosted from `fonts/` (no font is loaded from another server): Inter,
+Montserrat, Open Sans, Roboto, Poppins, Lato, Nunito, Source Sans 3, DM Sans, Raleway,
+Lora and Merriweather – all under the SIL Open Font License, see `fonts/licenses/`.
 
 ## Copyright note
 

@@ -4,6 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Praise Songs with Subs</title>
+  <link rel="stylesheet" href="css/fonts.css">
   <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
@@ -68,7 +69,12 @@
       <p id="status" class="status" hidden></p>
       <div id="tapHelp" class="status" hidden>
         <b>Tap along:</b> press <kbd>Space</kbd> the moment each line <i>starts</i> being sung.
-        <kbd>B</kbd> clears the screen (instrumental), <kbd>⌫</kbd> steps back, <kbd>Esc</kbd> stops.
+        <kbd>B</kbd> clears the screen (instrumental), <kbd>S</kbd> skips a line that is not sung,
+        <kbd>⌫</kbd> steps back, <kbd>Esc</kbd> stops.
+        <div id="tapSections" hidden>
+          <p>Song goes somewhere else? Insert a section <i>before</i> the next line, then keep tapping:</p>
+          <div id="tapSectionButtons"></div>
+        </div>
       </div>
       <div class="row nudge">
         <span class="muted">Shift all</span>
@@ -77,12 +83,13 @@
         <button data-shift="0.1">+0.1</button>
         <button data-shift="0.5">+0.5 s</button>
       </div>
+      <label class="check"><input type="checkbox" id="ripple" checked> Changing a time moves all following lines too</label>
       <ol id="cueList"></ol>
       <div class="row">
         <button id="addCue">+ Line</button>
         <button id="addBlank">+ Break</button>
       </div>
-      <p class="muted">Click a line to jump to it. A line stays until the next one is sung: for an empty screen, pause where it should end and add a <b>Break</b>. Type <kbd>|</kbd> inside a line to force a line break there.</p>
+      <p class="muted">Click a line to jump to it. To fix a line that is off: pause where it should start and click <b>⏱</b>, or type the time. A line stays until the next one is sung: for an empty screen, pause where it should end and add a <b>Break</b>. Type <kbd>|</kbd> inside a line to force a line break.</p>
     </section>
 
     <section>
@@ -105,15 +112,26 @@
         <label>Text position
           <select id="position">
             <option value="center">Centre</option>
+            <option value="upper">Upper third</option>
             <option value="lower">Lower third</option>
           </select>
         </label>
         <label>Font
           <select id="font">
             <option value="Inter, system-ui, sans-serif">Inter</option>
-            <option value="system-ui, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif">System sans</option>
-            <option value="Georgia, 'Times New Roman', serif">Serif</option>
-            <option value="'Trebuchet MS', Verdana, sans-serif">Rounded</option>
+            <option value="'Montserrat', sans-serif">Montserrat</option>
+            <option value="'Open Sans', sans-serif">Open Sans</option>
+            <option value="'Roboto', sans-serif">Roboto</option>
+            <option value="'Poppins', sans-serif">Poppins</option>
+            <option value="'Lato', sans-serif">Lato</option>
+            <option value="'Nunito', sans-serif">Nunito</option>
+            <option value="'Source Sans 3', sans-serif">Source Sans 3</option>
+            <option value="'DM Sans', sans-serif">DM Sans</option>
+            <option value="'Raleway', sans-serif">Raleway</option>
+            <option value="'Lora', serif">Lora</option>
+            <option value="'Merriweather', serif">Merriweather</option>
+            <option value="system-ui, 'Segoe UI', 'Helvetica Neue', Arial, sans-serif">System sans</option>
+            <option value="Georgia, 'Times New Roman', serif">Georgia (serif)</option>
           </select>
         </label>
       </div>
