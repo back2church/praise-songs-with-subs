@@ -164,3 +164,20 @@ test('wrapping balances lines and breaks between phrases', () => {
   for (const l of wrapText('GOD in three Persons blessed Trinity forever and ever amen amen', measure, 20)) assert.ok(l.length <= 20, l);
   assert.deepEqual(breakLines(['Supercalifragilistic'], [20], 1, 10), ['Supercalifragilistic']);
 });
+
+import { listSections, retimeFrom } from '../js/lyrics.js';
+
+test('listSections: labelled sections once each, unlabelled stanzas named by first words', () => {
+  const secs = listSections('Verse 1\nv1 a\nv1 b\n\n[Chorus]\nc a x2\n\nChorus\n\nlast stanza with many words here\nend');
+  assert.deepEqual(secs.map((s) => s.label), ['Verse 1', 'Chorus', '“last stanza with many …”']);
+  assert.deepEqual(secs[1].lines, ['c a', 'c a']);
+  assert.deepEqual(listSections('[00:01.00]timed'), []);
+});
+
+test('retimeFrom moves the line and every later line by the same amount', () => {
+  const cues = [{ t: 1, text: 'a' }, { t: 5, text: 'b' }, { t: 8, text: '' }, { t: 12, text: 'c' }, { t: null, text: 'd' }];
+  assert.equal(retimeFrom(cues, 1, 6.5), 1.5);
+  assert.deepEqual(cues.map((c) => c.t), [1, 6.5, 9.5, 13.5, null]);
+  retimeFrom(cues, 1, 0); // never negative
+  assert.deepEqual(cues.map((c) => c.t), [1, 0, 3, 7, null]);
+});

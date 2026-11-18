@@ -82,6 +82,59 @@ export function expandSections(text) {
   return out;
 }
 
+/**
+ * The sections of a lyric sheet, for inserting repeats while tapping.
+ * Labelled sections use their label; unlabelled stanzas (separated by blank lines)
+ * are named after their first words. Each section appears once, with its lines.
+ */
+export function listSections(text) {
+  const found = [];
+  const byKey = new Map();
+  let open = null; // { key, label, lines }
+  const close = () => {
+    if (open && open.lines.length && !byKey.has(open.key)) {
+      const sec = { label: open.label, lines: open.lines };
+      byKey.set(open.key, sec);
+      found.push(sec);
+    }
+    open = null;
+  };
+  for (const raw of String(text).split(/\r?\n/)) {
+    const line = raw.trim();
+    if (!line) { close(); continue; }
+    if (/-->|^\[\d+:\d+/.test(line)) return []; // timed formats have no sections
+    const h = line.match(SECTION_RE);
+    if (h) {
+      close();
+      const label = (h[1] || h[2]).trim().replace(/\s+/g, ' ');
+      open = { key: label.toLowerCase(), label: label.charAt(0).toUpperCase() + label.slice(1), lines: [] };
+      continue;
+    }
+    const r = line.match(LINE_TIMES_RE);
+    const body = r ? line.slice(0, r.index).trim() : line;
+    if (!open) {
+      const words = body.split(/\s+/);
+      open = { key: '\u0000' + body.toLowerCase(), label: `“${words.slice(0, 4).join(' ')}${words.length > 4 ? ' …' : ''}”`, lines: [] };
+    }
+    for (let k = 0; k < (r ? times(r[1], r[2]) : 1); k++) open.lines.push(body);
+  }
+  close();
+  return found;
+}
+
+/**
+ * Change the start of cue `index` to `t` and move every later timed cue by the same
+ * amount, so the rest of the song keeps its spacing. Returns the shift in seconds.
+ */
+export function retimeFrom(cues, index, t) {
+  const old = cues[index].t;
+  cues[index].t = Math.max(0, t);
+  if (old == null) return 0;
+  const delta = cues[index].t - old;
+  for (let i = index + 1; i < cues.length; i++) if (cues[i].t != null) cues[i].t = Math.max(0, cues[i].t + delta);
+  return delta;
+}
+
 function parseSubtitles(text) {
   const segments = [];
   for (const block of text.replace(/\r/g, '').split(/\n{2,}/)) {

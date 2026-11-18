@@ -1,4 +1,4 @@
-import { parseLyrics, parseLrcMeta, parseTime, formatTime, activeIndex, toLrc, toSrt, alignLyrics, wordsToCues } from './lyrics.js';
+import { parseLyrics, parseLrcMeta, listSections, retimeFrom, parseTime, formatTime, activeIndex, toLrc, toSrt, alignLyrics, wordsToCues } from './lyrics.js';
 import { THEMES, PALETTES, customPalette } from './backgrounds.js';
 import { drawFrame } from './renderer.js';
 
@@ -16,12 +16,13 @@ const state = {
   tap: null, // { index } while tap-sync is running
   recorder: null,
   busy: false, // auto-sync running
+  sections: [], // sections of the lyric sheet, for inserting repeats while tapping
 };
 
 // ---------- Settings (remembered between visits) ----------
 
 const LOOK = ['lead', 'theme', 'palette', 'position', 'font', 'scale', 'dim', 'singCue', 'showNext', 'caps', 'textColor', 'bgColor', 'customA', 'customB'];
-const SETTINGS = [...LOOK, 'language', 'model', 'resolution'];
+const SETTINGS = [...LOOK, 'ripple', 'language', 'model', 'resolution'];
 
 for (const [key, t] of Object.entries(THEMES)) $('theme').add(new Option(t.name, key));
 for (const [key, p] of Object.entries(PALETTES)) $('palette').add(new Option(p.name, key));
@@ -191,6 +192,7 @@ function applyLyrics() {
   if (timedCount() && !timed && !confirm('Replace the current lyrics and their timing?')) return;
   stopTap();
   state.cues = cues;
+  state.sections = timed ? [] : listSections(text);
   const meta = parseLrcMeta(text);
   if (meta.ti && !$('title').value) $('title').value = meta.ti;
   if (meta.ar && !$('subtitle').value) $('subtitle').value = meta.ar;
@@ -212,14 +214,24 @@ function renderCues() {
     const time = Object.assign(document.createElement('input'), { className: 'time', value: formatTime(cue.t), placeholder: '–:––', title: 'Start time' });
     const text = Object.assign(document.createElement('input'), { value: cue.text, placeholder: '(break – empty screen)' });
     const del = Object.assign(document.createElement('button'), { textContent: '×', title: 'Delete line' });
+    const stamp = Object.assign(document.createElement('button'), { textContent: '⏱', className: 'stamp', title: 'Set to the current song position' });
     time.setAttribute('aria-label', `Start time of line ${i + 1}`);
     text.setAttribute('aria-label', `Text of line ${i + 1}`);
     // Clicking anywhere on a line jumps the song to it.
     li.addEventListener('click', (e) => {
-      if (e.target !== del && cue.t != null && state.file && !state.recorder && !state.tap) media.currentTime = cue.t;
+      if (e.target !== del && e.target !== stamp && cue.t != null && state.file && !state.recorder && !state.tap) media.currentTime = cue.t;
     });
     time.addEventListener('change', () => {
-      cue.t = time.value.trim() === '' ? null : parseTime(time.value);
+      const t = time.value.trim() === '' ? null : parseTime(time.value);
+      if (t == null) cue.t = null;
+      else setCueTime(cue, t);
+      sortCues();
+      renderCues();
+      refresh();
+    });
+    stamp.addEventListener('click', () => {
+      if (!state.file || state.tap) return;
+      setCueTime(cue, media.currentTime);
       sortCues();
       renderCues();
       refresh();
@@ -230,9 +242,17 @@ function renderCues() {
       renderCues();
       refresh();
     });
-    li.append(time, text, del);
+    li.append(time, text, stamp, del);
     list.append(li);
   });
+}
+
+/** Set one line's start; with "move following lines" on, later lines keep their spacing. */
+function setCueTime(cue, t) {
+  const i = state.cues.indexOf(cue);
+  if (!$('ripple').checked || cue.t == null) { cue.t = Math.max(0, t); return; }
+  const d = retimeFrom(state.cues, i, t);
+  if (Math.abs(d) >= 0.05) setStatus(`Line ${i + 1} and all lines after it moved ${d > 0 ? 'later' : 'earlier'} by ${Math.abs(d).toFixed(2)} s.`);
 }
 
 function addCue(text) {
@@ -274,10 +294,34 @@ function startTap() {
   }
   if (document.activeElement) document.activeElement.blur();
   state.tap = { index };
+  renderTapSections();
   media.currentTime = index > 0 ? Math.max(0, state.cues[index - 1].t - 3) : 0;
   media.play();
   renderCues();
   refresh();
+}
+
+function renderTapSections() {
+  const box = $('tapSectionButtons');
+  box.textContent = '';
+  const secs = (state.sections || []).slice(0, 9);
+  $('tapSections').hidden = !secs.length;
+  secs.forEach((sec, k) => {
+    const b = document.createElement('button');
+    b.title = sec.lines.join(' / ');
+    b.append(Object.assign(document.createElement('kbd'), { textContent: String(k + 1) }), sec.label);
+    b.addEventListener('mousedown', (e) => e.preventDefault()); // keep keyboard focus off the button
+    b.addEventListener('click', () => { insertSection(k); renderCues(); });
+    box.append(b);
+  });
+}
+
+/** Insert a section's lines (untimed) before the line that is due to be tapped next. */
+function insertSection(k) {
+  const sec = state.sections[k];
+  if (!state.tap || !sec) return;
+  state.cues.splice(state.tap.index, 0, ...sec.lines.map((text) => ({ t: null, text })));
+  setStatus(`${sec.label} inserted – tap its first line when it starts.`);
 }
 
 function stopTap() {
@@ -291,12 +335,19 @@ function stopTap() {
 function tapKey(e) {
   const tap = state.tap;
   const now = media.currentTime;
+  const atEnd = tap.index >= state.cues.length;
   if (e.key === ' ' || e.key === 'Enter') {
+    if (atEnd) return e.preventDefault();
     state.cues[tap.index].t = now;
     tap.index++;
   } else if (e.key.toLowerCase() === 'b') {
     state.cues.splice(tap.index, 0, { t: now, text: '' });
     tap.index++;
+  } else if (e.key.toLowerCase() === 's') {
+    if (atEnd) return e.preventDefault();
+    state.cues.splice(tap.index, 1); // this line is not sung here
+  } else if (/^[1-9]$/.test(e.key) && state.sections?.[Number(e.key) - 1]) {
+    insertSection(Number(e.key) - 1);
   } else if (e.key === 'Backspace') {
     if (tap.index > 0) {
       tap.index--;
@@ -306,13 +357,17 @@ function tapKey(e) {
     }
   } else if (e.key === 'Escape') {
     media.pause();
+    setStatus(atEnd ? 'All lines timed. Play it back and fine-tune with ⏱ or by editing a time.' : 'Tapping stopped. Press “Tap along” to continue from the first untimed line.');
     return stopTap();
   } else return;
   e.preventDefault();
-  if (tap.index >= state.cues.length) {
+  if (tap.index >= state.cues.length && !(state.sections || []).length) {
     stopTap();
-    setStatus('All lines timed. Play it back and fine-tune with the “Shift all” buttons or by editing a time.');
-  } else renderCues();
+    setStatus('All lines timed. Play it back and fine-tune with ⏱ or by editing a time.');
+  } else {
+    if (tap.index >= state.cues.length) setStatus('All lines tapped. If the song goes on, insert a section; otherwise press Esc to finish.');
+    renderCues();
+  }
 }
 
 $('tapSync').addEventListener('click', () => (state.tap ? (media.pause(), stopTap()) : startTap()));
@@ -516,11 +571,19 @@ function frame() {
     const cue = state.cues[state.tap.index];
     $('tapNext').hidden = false;
     $('tapNext').innerHTML = '';
-    $('tapNext').append('Space when you hear: ', Object.assign(document.createElement('b'), { textContent: cue ? cue.text || '(break)' : '' }));
+    if (cue) $('tapNext').append('Space when you hear: ', Object.assign(document.createElement('b'), { textContent: cue.text || '(break)' }));
+    else $('tapNext').append('End of the lyrics – insert a section (1–9) or press ', Object.assign(document.createElement('b'), { textContent: 'Esc' }), ' to finish.');
   }
   requestAnimationFrame(frame);
 }
 
-for (const w of [400, 600, 700]) document.fonts?.load(`${w} 40px Inter`).catch(() => {});
+// Fonts used only on the canvas are not fetched by the browser on their own: load the chosen one.
+function loadFont() {
+  const family = $('font').value.split(',')[0].trim();
+  for (const w of [400, 500, 600, 700]) document.fonts?.load(`${w} 40px ${family}`).catch(() => {});
+}
+$('font').addEventListener('change', loadFont);
+$('template').addEventListener('change', loadFont);
+loadFont();
 refresh();
 requestAnimationFrame(frame);
