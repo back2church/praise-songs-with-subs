@@ -181,3 +181,11 @@ test('retimeFrom moves the line and every later line by the same amount', () => 
   retimeFrom(cues, 1, 0); // never negative
   assert.deepEqual(cues.map((c) => c.t), [1, 0, 3, 7, null]);
 });
+
+test('a break with the same time as the line before it does not hide that line', () => {
+  const cues = [{ t: 10, text: 'JESUS ich bin ganz DEIN' }, { t: 10, text: '' }, { t: 14, text: 'Öffne die Himmel' }];
+  assert.equal(activeIndex(cues, 11), 0);
+  assert.equal(activeIndex(cues, 14), 2);
+  const later = [{ t: 10, text: 'a' }, { t: 12, text: '' }];
+  assert.equal(activeIndex(later, 13), 1);
+});

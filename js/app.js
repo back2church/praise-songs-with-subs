@@ -250,17 +250,41 @@ function renderCues() {
 /** Set one line's start; with "move following lines" on, later lines keep their spacing. */
 function setCueTime(cue, t) {
   const i = state.cues.indexOf(cue);
-  if (!$('ripple').checked || cue.t == null) { cue.t = Math.max(0, t); return; }
+  // Breaks only end the line before them, so moving one never moves the rest of the song.
+  if (!$('ripple').checked || cue.t == null || !cue.text) { cue.t = Math.max(0, t); return; }
   const d = retimeFrom(state.cues, i, t);
   if (Math.abs(d) >= 0.05) setStatus(`Line ${i + 1} and all lines after it moved ${d > 0 ? 'later' : 'earlier'} by ${Math.abs(d).toFixed(2)} s.`);
 }
 
+/**
+ * Add a line or break at the current song position. If the song sits at (or just after)
+ * the start of a line – e.g. after clicking that line – the new cue goes after it instead,
+ * so it never takes that line's place.
+ */
 function addCue(text) {
-  const t = state.file ? media.currentTime : null;
-  state.cues.push({ t, text });
+  let t = state.file ? media.currentTime : null;
+  let note = '';
+  if (t != null) {
+    const i = activeIndex(state.cues, t + 0.001);
+    const cur = state.cues[i];
+    if (cur && t - cur.t < 0.5) {
+      const next = state.cues.slice(i + 1).find((c) => c.t != null);
+      const words = cur.text ? cur.text.split(/\s+/).length : 0;
+      t = cur.t + Math.max(2, words * 0.6 + 1);
+      if (next) t = Math.min(t, cur.t + (next.t - cur.t) / 2);
+      note = ` after “${cur.text || 'break'}”`;
+    }
+    while (state.cues.some((c) => c.t != null && Math.abs(c.t - t) < 0.05)) t += 0.1;
+  }
+  const cue = { t, text };
+  state.cues.push(cue);
   sortCues();
   renderCues();
   refresh();
+  if (t != null) {
+    setStatus(`${text ? 'Line' : 'Break'} added at ${formatTime(t)}${note}. To place it exactly: play to the spot, pause and click ⏱ on it.`);
+    $('cueList').children[state.cues.indexOf(cue)]?.scrollIntoView({ block: 'nearest' });
+  }
 }
 $('addCue').addEventListener('click', () => addCue('New line'));
 $('addBlank').addEventListener('click', () => addCue(''));

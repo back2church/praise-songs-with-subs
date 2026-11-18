@@ -189,6 +189,8 @@ export function activeIndex(cues, t) {
   let idx = -1;
   for (let i = 0; i < cues.length; i++) {
     if (cues[i].t == null || cues[i].t > t) break;
+    // A break at the very same moment as the line before it would hide that line completely: ignore it.
+    if (!cues[i].text && idx >= 0 && cues[idx].text && cues[i].t - cues[idx].t < 0.05) continue;
     idx = i;
   }
   return idx;
