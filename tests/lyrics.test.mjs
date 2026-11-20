@@ -216,3 +216,35 @@ test('LRC and SRT keep translations', () => {
   assert.deepEqual(parseLyrics(toLrc(cues)).cues, cues);
   assert.match(toSrt(cues), /Öffne die Himmel\nOpen the heavens\n/);
 });
+
+import { guessLanguage, translationJob } from '../js/lyrics.js';
+
+test('guessLanguage', () => {
+  assert.equal(guessLanguage('Öffne die Himmel\nWeite das Tor\nJESUS ich bin ganz DEIN'), 'de');
+  assert.equal(guessLanguage('Open the heavens\nJESUS I am all Yours'), 'en');
+});
+
+test('translationJob keeps labels, blank lines and x2, and translates each line once', () => {
+  const sheet = 'Strophe 1\nÖffne die Himmel x2\nWeite das Tor // old\n\nRefrain\nÖffne die Himmel\n\nRefrain';
+  const job = translationJob(sheet);
+  assert.deepEqual(job.lines, ['Öffne die Himmel', 'Weite das Tor']);
+  const out = job.build(['Open the heavens', 'Widen the gate']);
+  assert.equal(out, 'Strophe 1\nOpen the heavens x2\nWiden the gate\n\nRefrain\nOpen the heavens\n\nRefrain');
+  // the result pairs line by line with the original
+  const { map, lyricsCount, translationCount } = pairTranslation(sheet, out);
+  assert.equal(lyricsCount, translationCount);
+  assert.equal(map.get('Weite das Tor'), 'Widen the gate');
+});
+
+test('translationJob on timed lyrics follows the cue order', () => {
+  const lrc = '[00:01.00]Eins\n[00:02.00]\n[00:03.00]Zwei\n[00:04.00]Eins';
+  const job = translationJob(lrc);
+  assert.deepEqual(job.lines, ['Eins', 'Zwei']);
+  assert.equal(job.build(['One', 'Two']), 'One\nTwo\nOne');
+  assert.equal(pairTranslation(lrc, job.build(['One', 'Two'])).map.get('Zwei'), 'Two');
+});
+
+test('translationJob tidies machine output', () => {
+  const job = translationJob('JESUS ich bin ganz DEIN\nDas hat mich gerettet\nHalleluja!');
+  assert.equal(job.build(["JESUS I'm all YOURs", 'That saved me.', 'Hallelujah!']), "JESUS I'm all YOURS\nThat saved me\nHallelujah!");
+});

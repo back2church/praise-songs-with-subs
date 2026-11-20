@@ -214,6 +214,54 @@ export function applyTranslations(cues, map) {
   return matched;
 }
 
+/** Guess whether a lyric sheet is German or English (for the translation direction). */
+export function guessLanguage(text) {
+  const words = String(text).toLowerCase().match(/\p{L}+/gu) || [];
+  const de = new Set('und der die das ich du er wir ihr ist bin nicht mit dein mein sein dich mich dir mir zu auf für ein eine den dem herr gott jesus vater geist alle wie wenn denn auch noch nur so'.split(' '));
+  const en = new Set('and the i you he we is are am not with your my his me to on for a an lord god jesus father spirit all how when for also just so of in'.split(' '));
+  let d = 0, e = 0;
+  for (const w of words) { if (de.has(w)) d++; if (en.has(w)) e++; if (/[äöüß]/.test(w)) d += 2; }
+  return d > e ? 'de' : 'en';
+}
+
+/**
+ * Prepare a lyric sheet for machine translation. Returns the unique lines to translate and a
+ * function that rebuilds the sheet with their translations, keeping section labels, blank
+ * lines and "x2" so that the result pairs line by line with the original.
+ */
+export function translationJob(lyricsText) {
+  const text = String(lyricsText || '');
+  const { timed, cues } = parseLyrics(text);
+  const unique = [];
+  const seen = new Set();
+  const want = (line) => { if (line && !seen.has(line)) { seen.add(line); unique.push(line); } };
+  let rows;
+  if (timed) {
+    rows = cues.filter((c) => c.text).map((c) => ({ src: c.text }));
+  } else {
+    rows = text.split(/\r?\n/).map((raw) => {
+      const line = raw.trim();
+      if (!line || SECTION_RE.test(line)) return { keep: line };
+      const body = splitTranslation(line).text;
+      const r = body.match(LINE_TIMES_RE);
+      return r ? { src: body.slice(0, r.index).trim(), suffix: r[0] } : { src: body };
+    });
+  }
+  rows.forEach((r) => want(r.src));
+  return {
+    lines: unique,
+    build: (translated) => {
+      const tidy = (src, out) => {
+        out = out.replace(/\b(\p{Lu}{2,})(\p{Ll}+)\b/gu, (w) => w.toLocaleUpperCase()); // "YOURs" -> "YOURS"
+        if (!/[.!?…]$/.test(src)) out = out.replace(/\.$/, ''); // no full stop the original did not have
+        return out;
+      };
+      const map = new Map(unique.map((l, i) => [l, translated[i] ? tidy(l, translated[i]) : '']));
+      return rows.map((r) => (r.src != null ? (map.get(r.src) || r.src) + (r.suffix || '') : r.keep)).join('\n');
+    },
+  };
+}
+
 /** Map of line -> translation taken from existing cues, to carry translations over when cues are rebuilt. */
 export const translationsOf = (cues) => new Map(cues.filter((c) => c.text && c.tr).map((c) => [c.text, c.tr]));
 

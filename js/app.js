@@ -1,4 +1,4 @@
-import { parseLyrics, parseLrcMeta, listSections, retimeFrom, splitTranslation, pairTranslation, applyTranslations, translationsOf, parseTime, formatTime, activeIndex, toLrc, toSrt, alignLyrics, wordsToCues } from './lyrics.js';
+import { parseLyrics, parseLrcMeta, listSections, retimeFrom, splitTranslation, pairTranslation, applyTranslations, translationsOf, guessLanguage, translationJob, parseTime, formatTime, activeIndex, toLrc, toSrt, alignLyrics, wordsToCues } from './lyrics.js';
 import { THEMES, PALETTES, customPalette } from './backgrounds.js';
 import { drawFrame } from './renderer.js';
 
@@ -216,6 +216,38 @@ function applyTranslationText(rerender = true) {
     : `Lyrics have ${lyricsCount} lines, the translation ${translationCount}: check that they line up. ${matched} of ${total} lines matched.`;
   if (rerender) renderCues();
 }
+
+// Pre-select the direction from the language of the lyrics.
+$('trDetails').addEventListener('toggle', () => {
+  if ($('trDetails').open && $('lyricsText').value.trim()) $('trDirection').value = guessLanguage($('lyricsText').value) === 'de' ? 'de-en' : 'en-de';
+});
+
+let trWorker = null;
+$('trAuto').addEventListener('click', async () => {
+  const job = translationJob($('lyricsText').value);
+  if (!job.lines.length) return setStatus('Paste the lyrics first, then translate.', true);
+  if ($('trText').value.trim() && !confirm('Replace the translation in the box with a machine translation?')) return;
+  $('trAuto').disabled = true;
+  try {
+    trWorker ||= new Worker(new URL('./translate-worker.js', import.meta.url), { type: 'module' });
+    const lines = await new Promise((resolve, reject) => {
+      trWorker.onmessage = ({ data }) => {
+        if (data.type === 'status') setStatus(data.text);
+        else if (data.type === 'done') resolve(data.lines);
+        else reject(new Error(data.text));
+      };
+      trWorker.onerror = (err) => reject(new Error(err.message || 'The translation model could not be loaded (internet needed the first time).'));
+      trWorker.postMessage({ lines: job.lines, direction: $('trDirection').value });
+    });
+    $('trText').value = job.build(lines);
+    applyTranslationText();
+    setStatus(`Draft translation of ${job.lines.length} lines ready. Please check it in the translation box – machine translation is often too literal for songs.`);
+  } catch (err) {
+    setStatus(`Translation failed: ${err.message}`, true);
+  } finally {
+    $('trAuto').disabled = false;
+  }
+});
 
 let trTimer = 0;
 $('trText').addEventListener('input', () => {

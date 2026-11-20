@@ -37,6 +37,14 @@
       </div>
       <details id="trDetails">
         <summary>Translation (optional)</summary>
+        <div class="row">
+          <select id="trDirection" aria-label="Translation direction">
+            <option value="de-en">German → English</option>
+            <option value="en-de">English → German</option>
+          </select>
+          <button id="trAuto">Translate (AI draft)</button>
+        </div>
+        <p class="muted">Runs in this browser; the first time it downloads a model of about 106 MB per direction. A draft only – please correct it, e.g. capitalise names of GOD.</p>
         <textarea id="trText" rows="7" placeholder="Paste the translation with the same structure as the lyrics: one line per line, the same section labels (Chorus, Verse 2 …).&#10;&#10;It is matched line by line and shown below each line. Timing is kept.&#10;&#10;Or write it on the same line in the lyrics: Öffne die Himmel // Open the heavens"></textarea>
         <p id="trInfo" class="muted"></p>
       </details>
