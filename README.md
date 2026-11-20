@@ -60,6 +60,20 @@ Lyric sheets usually print the chorus once. Two ways to get the repeats:
 - **Auto-sync** finds repeats by itself: when the singer returns to lines that the
   sheet lists only once, those lines are added again at the right time.
 
+### Translations
+
+Show a translation below each line, smaller and in its own colour (German under
+English or the other way round):
+
+- Open **Translation** under the lyrics and paste the translation with the same
+  structure (one line per line, same section labels). It is matched line by line,
+  shown at once and the timing is kept.
+- Or write it on the same line: `Öffne die Himmel // Open the heavens`.
+- Or type it into a line's translation field in the list.
+
+Colour, size and on/off are under Look (and saved in templates). `.lrc` files keep
+the translation (`line // translation`); `.srt` puts it on a second line.
+
 ### Long lines
 
 Long lines are wrapped into balanced rows that break between phrases (after a

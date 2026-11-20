@@ -39,6 +39,29 @@ function paintBlock(ctx, W, block, cy, alpha, scale = 1, color = '#ffffff') {
   ctx.restore();
 }
 
+/**
+ * A sung line with its optional translation below it.
+ * Positions are given for the centre of the main text, so the translation can be
+ * faded in or out without the main text moving.
+ */
+function lineLayout(ctx, W, H, cue, o) {
+  const main = layout(ctx, W, H, o.tx(cue.text), { size: o.size, font: o.font });
+  const tr = o.showTr && cue.tr ? layout(ctx, W, H, o.tx(cue.tr), { size: o.size * o.trScale, font: o.font, weight: 500 }) : null;
+  const gap = tr ? o.size * 0.22 : 0;
+  return { main, tr, gap, height: main.height + (tr ? gap + tr.height : 0) };
+}
+
+/** Main-text centre for a line whose whole block (text + translation) is centred on cy. */
+const mainCentre = (blk, cy) => cy - (blk.height - blk.main.height) / 2;
+
+function paintLine(ctx, W, blk, mainY, alpha, scale, colors, trAlpha = 1) {
+  paintBlock(ctx, W, blk.main, mainY, alpha, scale, colors.main);
+  if (blk.tr) {
+    const y = mainY + (blk.main.height / 2 + blk.gap + blk.tr.height / 2) * scale;
+    paintBlock(ctx, W, blk.tr, y, alpha * trAlpha, scale, colors.tr);
+  }
+}
+
 const PREVIEW_SCALE = 0.6;
 const PREVIEW_ALPHA = 0.5;
 const HANDOVER = 0.35; // seconds for the next line to move up into place
@@ -68,7 +91,7 @@ const hasNextTime = (c) => !!(c && c.t != null);
  *   time: media time in seconds, bgTime: animation clock in seconds,
  *   cues, lead,
  *   bg: { theme, palette, media, dim },
- *   style: { font, scale, position: 'upper'|'center'|'lower', showNext, singCue, caps, color },
+ *   style: { font, scale, position: 'upper'|'center'|'lower', showNext, singCue, caps, color, showTr, trColor, trScale },
  *   title, subtitle
  * }
  */
@@ -80,10 +103,13 @@ export function drawFrame(ctx, W, H, s) {
   const cy = { upper: H * 0.3, lower: H * 0.68 }[style.position] ?? H * 0.5;
   const gap = size * 0.35;
   const tx = (text) => (style.caps ? text.toLocaleUpperCase() : text);
-  const color = /^#[0-9a-f]{6}$/i.test(style.color || '') ? style.color : '#ffffff';
-  const block = (cue) => layout(ctx, W, H, tx(cue.text), { size, font: style.font });
+  const hex = (c, d) => (/^#[0-9a-f]{6}$/i.test(c || '') ? c : d);
+  const colors = { main: hex(style.color, '#ffffff'), tr: hex(style.trColor, '#b8c7e0') };
+  const color = colors.main;
+  const block = (cue) => lineLayout(ctx, W, H, cue, { size, font: style.font, tx, showTr: style.showTr !== false, trScale: Number(style.trScale) || 0.6 });
   const paint = (c, w, blk, y, alpha, scale = 1) => paintBlock(c, w, blk, y, alpha, scale, color);
-  const previewY = (above, own) => cy + above.height / 2 + gap + (own.height * PREVIEW_SCALE) / 2;
+  // The next line is previewed below the whole current block (text and translation), without its own translation.
+  const previewY = (above, own) => cy + above.height / 2 + gap + (own.main.height * PREVIEW_SCALE) / 2;
 
   const i = activeIndex(cues, t);
   const cur = cues[i], prev = cues[i - 1], next = cues[i + 1];
@@ -112,15 +138,19 @@ export function drawFrame(ctx, W, H, s) {
     if (hasNextTime(next) && !next.text) alpha = Math.min(alpha, clamp01((next.t - t) / 0.25));
 
     if (handsOver(prev, cur)) {
-      // Arrive: slide up from the preview position while the previous line fades away.
+      // Arrive: slide up from the preview position while the previous line fades away;
+      // the translation fades in as the line reaches its place.
       const k = ease(clamp01(age / HANDOVER));
       const prevBlock = block(prev);
-      paint(ctx, W, prevBlock, cy - k * size * 0.9, 1 - k);
-      paint(ctx, W, curBlock, lerp(previewY(prevBlock, curBlock), cy, k), alpha * lerp(PREVIEW_ALPHA, 1, k), lerp(PREVIEW_SCALE, 1, k));
+      // The outgoing translation leaves first and the whole block moves up by its own height,
+      // so it never crosses the incoming line.
+      paintLine(ctx, W, prevBlock, mainCentre(prevBlock, cy) - k * (size * 0.9 + prevBlock.height - prevBlock.main.height), 1 - k, 1, colors, clamp01(1 - 3 * k));
+      paintLine(ctx, W, curBlock, lerp(previewY(prevBlock, curBlock), mainCentre(curBlock, cy), k),
+        alpha * lerp(PREVIEW_ALPHA, 1, k), lerp(PREVIEW_SCALE, 1, k), colors, k);
     } else {
       // Arrived on an empty screen (it was announced in place): brighten when it is sung.
       const sung = style.singCue && lead > 0 ? clamp01(age / 0.3) : 1;
-      paint(ctx, W, curBlock, cy, alpha * (lead > 0 ? lerp(0.7, 1, sung) : clamp01(age / 0.3)));
+      paintLine(ctx, W, curBlock, mainCentre(curBlock, cy), alpha * (lead > 0 ? lerp(0.7, 1, sung) : clamp01(age / 0.3)), 1, colors);
     }
   }
 
@@ -130,9 +160,10 @@ export function drawFrame(ctx, W, H, s) {
     if (handsOver(cur, next)) {
       const window = style.showNext ? Infinity : lead;
       const a = style.showNext ? clamp01((t - cur.t) / 0.4) : clamp01((window - until) / 0.35);
-      if (until <= window) paint(ctx, W, block(next), previewY(curBlock, block(next)), a * PREVIEW_ALPHA, PREVIEW_SCALE);
+      if (until <= window) paintLine(ctx, W, block(next), previewY(curBlock, block(next)), a * PREVIEW_ALPHA, PREVIEW_SCALE, colors, 0);
     } else if (until <= lead) {
-      paint(ctx, W, block(next), cy, clamp01((lead - until) / 0.35) * (style.singCue ? 0.7 : 1));
+      const nb = block(next);
+      paintLine(ctx, W, nb, mainCentre(nb, cy), clamp01((lead - until) / 0.35) * (style.singCue ? 0.7 : 1), 1, colors);
     }
   }
 }
