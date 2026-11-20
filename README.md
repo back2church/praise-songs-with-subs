@@ -68,6 +68,10 @@ English or the other way round):
 - Open **Translation** under the lyrics and paste the translation with the same
   structure (one line per line, same section labels). It is matched line by line,
   shown at once and the timing is kept.
+- Or click **Translate (AI draft)** (German → English or English → German): an
+  Opus-MT model (Apache-2.0) translates in the browser, the lyrics are not uploaded.
+  The model (~106 MB per direction) is downloaded once and cached. The result is a
+  literal draft – correct it in the box.
 - Or write it on the same line: `Öffne die Himmel // Open the heavens`.
 - Or type it into a line's translation field in the list.
 
