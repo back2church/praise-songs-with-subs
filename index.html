@@ -35,6 +35,11 @@
         <label class="btn">Load file<input type="file" id="lyricsFile" accept=".txt,.lrc,.srt,.vtt,text/plain" hidden></label>
         <button id="applyLyrics" class="primary">Use these lyrics</button>
       </div>
+      <details id="trDetails">
+        <summary>Translation (optional)</summary>
+        <textarea id="trText" rows="7" placeholder="Paste the translation with the same structure as the lyrics: one line per line, the same section labels (Chorus, Verse 2 …).&#10;&#10;It is matched line by line and shown below each line. Timing is kept.&#10;&#10;Or write it on the same line in the lyrics: Öffne die Himmel // Open the heavens"></textarea>
+        <p id="trInfo" class="muted"></p>
+      </details>
     </section>
 
     <section>
@@ -143,6 +148,15 @@
           <input type="color" id="bgColor" value="#000000">
         </label>
       </div>
+      <div class="grid">
+        <label>Translation colour
+          <input type="color" id="trColor" value="#b8c7e0">
+        </label>
+        <label class="slider">Translation size
+          <input type="range" id="trScale" min="0.4" max="0.9" step="0.05" value="0.6">
+        </label>
+      </div>
+      <label class="check"><input type="checkbox" id="showTr" checked> Show translation (when there is one)</label>
       <div class="grid" id="customColors">
         <label>Own colour 1
           <input type="color" id="customA" value="#1f7fbf">

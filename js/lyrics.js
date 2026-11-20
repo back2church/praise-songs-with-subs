@@ -171,11 +171,51 @@ function parseLrc(text) {
 /** Parse SRT / WebVTT / LRC / plain text. Returns { cues, timed, format }. */
 export function parseLyrics(text) {
   text = String(text || '').replace(/^﻿/, '');
-  if (/-->/.test(text)) return { cues: parseSubtitles(text), timed: true, format: 'subtitles' };
-  if (/^\s*\[\d+:\d+(?:[.:]\d+)?\]/m.test(text)) return { cues: parseLrc(text), timed: true, format: 'lrc' };
-  const cues = expandSections(text).map((l) => ({ t: null, text: l }));
-  return { cues, timed: false, format: 'plain' };
+  let out;
+  if (/-->/.test(text)) out = { cues: parseSubtitles(text), timed: true, format: 'subtitles' };
+  else if (/^\s*\[\d+:\d+(?:[.:]\d+)?\]/m.test(text)) out = { cues: parseLrc(text), timed: true, format: 'lrc' };
+  else out = { cues: expandSections(text).map((l) => ({ t: null, text: l })), timed: false, format: 'plain' };
+  out.cues = out.cues.map((c) => ({ ...c, ...splitTranslation(c.text) }));
+  for (const c of out.cues) if (!c.tr) delete c.tr;
+  return out;
 }
+
+// ---------- Translations ----------
+
+const TR_SEP = /\s+\/\/\s+/;
+
+/** "Öffne die Himmel // Open the heavens" -> { text: 'Öffne die Himmel', tr: 'Open the heavens' } */
+export function splitTranslation(line) {
+  const parts = String(line).split(TR_SEP);
+  return parts.length > 1 ? { text: parts[0].trim(), tr: parts.slice(1).join(' / ').trim() } : { text: String(line) };
+}
+
+/**
+ * Pair the lines of a lyric sheet with the lines of its translation (same structure:
+ * one line per line, same section labels) and return a map from original line to translation.
+ * Lines are compared after expanding repeats, so labels and x2 work in both texts.
+ */
+export function pairTranslation(lyricsText, translationText) {
+  const lines = (txt) => parseLyrics(txt).cues.map((c) => c.text).filter(Boolean);
+  const a = lines(lyricsText), b = lines(translationText);
+  const map = new Map();
+  a.forEach((line, i) => { if (b[i] && !map.has(line)) map.set(line, b[i]); });
+  return { map, lyricsCount: a.length, translationCount: b.length };
+}
+
+/** Give each cue the translation of its text from the map (cues not in the map keep theirs). */
+export function applyTranslations(cues, map) {
+  let matched = 0;
+  for (const c of cues) {
+    if (!c.text || !map.has(c.text)) continue;
+    c.tr = map.get(c.text);
+    matched++;
+  }
+  return matched;
+}
+
+/** Map of line -> translation taken from existing cues, to carry translations over when cues are rebuilt. */
+export const translationsOf = (cues) => new Map(cues.filter((c) => c.text && c.tr).map((c) => [c.text, c.tr]));
 
 /** Meta tags like [ti:Title] from an LRC file. */
 export function parseLrcMeta(text) {
@@ -189,6 +229,8 @@ export function activeIndex(cues, t) {
   let idx = -1;
   for (let i = 0; i < cues.length; i++) {
     if (cues[i].t == null || cues[i].t > t) break;
+    // A break at the very same moment as the line before it would hide that line completely: ignore it.
+    if (!cues[i].text && idx >= 0 && cues[idx].text && cues[i].t - cues[idx].t < 0.05) continue;
     idx = i;
   }
   return idx;
@@ -201,7 +243,7 @@ function lrcStamp(t) {
 
 export function toLrc(cues, meta = {}) {
   const head = Object.entries(meta).filter(([, v]) => v).map(([k, v]) => `[${k}:${v}]`);
-  const body = cues.filter((c) => c.t != null).map((c) => lrcStamp(c.t) + c.text.replace(/\n/g, ' '));
+  const body = cues.filter((c) => c.t != null).map((c) => lrcStamp(c.t) + c.text.replace(/\n/g, ' ') + (c.tr ? ` // ${c.tr}` : ''));
   return [...head, ...body].join('\n') + '\n';
 }
 
@@ -219,7 +261,7 @@ export function toSrt(cues, lead = 0, duration = Infinity) {
     if (!c.text) return;
     const start = Math.max(0, c.t - lead);
     const end = Math.max(start + 0.2, Math.min(i + 1 < timed.length ? timed[i + 1].t : c.t + 6, duration));
-    out.push(`${out.length + 1}\n${srtStamp(start)} --> ${srtStamp(end)}\n${c.text}\n`);
+    out.push(`${out.length + 1}\n${srtStamp(start)} --> ${srtStamp(end)}\n${c.text}${c.tr ? `\n${c.tr}` : ''}\n`);
   });
   return out.join('\n');
 }

@@ -1,4 +1,4 @@
-import { parseLyrics, parseLrcMeta, listSections, retimeFrom, parseTime, formatTime, activeIndex, toLrc, toSrt, alignLyrics, wordsToCues } from './lyrics.js';
+import { parseLyrics, parseLrcMeta, listSections, retimeFrom, splitTranslation, pairTranslation, applyTranslations, translationsOf, parseTime, formatTime, activeIndex, toLrc, toSrt, alignLyrics, wordsToCues } from './lyrics.js';
 import { THEMES, PALETTES, customPalette } from './backgrounds.js';
 import { drawFrame } from './renderer.js';
 
@@ -21,7 +21,7 @@ const state = {
 
 // ---------- Settings (remembered between visits) ----------
 
-const LOOK = ['lead', 'theme', 'palette', 'position', 'font', 'scale', 'dim', 'singCue', 'showNext', 'caps', 'textColor', 'bgColor', 'customA', 'customB'];
+const LOOK = ['showTr', 'trColor', 'trScale', 'lead', 'theme', 'palette', 'position', 'font', 'scale', 'dim', 'singCue', 'showNext', 'caps', 'textColor', 'bgColor', 'customA', 'customB'];
 const SETTINGS = [...LOOK, 'ripple', 'language', 'model', 'resolution'];
 
 for (const [key, t] of Object.entries(THEMES)) $('theme').add(new Option(t.name, key));
@@ -193,6 +193,7 @@ function applyLyrics() {
   stopTap();
   state.cues = cues;
   state.sections = timed ? [] : listSections(text);
+  applyTranslationText(false);
   const meta = parseLrcMeta(text);
   if (meta.ti && !$('title').value) $('title').value = meta.ti;
   if (meta.ar && !$('subtitle').value) $('subtitle').value = meta.ar;
@@ -201,11 +202,33 @@ function applyLyrics() {
   refresh();
 }
 
+// ---------- Translation ----------
+
+/** Match the translation box line by line to the lyrics box and put each translation on its line. */
+function applyTranslationText(rerender = true) {
+  const trText = $('trText').value;
+  if (!trText.trim()) { $('trInfo').textContent = ''; return; }
+  const { map, lyricsCount, translationCount } = pairTranslation($('lyricsText').value, trText);
+  const matched = applyTranslations(state.cues, map);
+  const total = state.cues.filter((c) => c.text).length;
+  $('trInfo').textContent = lyricsCount === translationCount
+    ? `${matched} of ${total} lines have a translation.`
+    : `Lyrics have ${lyricsCount} lines, the translation ${translationCount}: check that they line up. ${matched} of ${total} lines matched.`;
+  if (rerender) renderCues();
+}
+
+let trTimer = 0;
+$('trText').addEventListener('input', () => {
+  clearTimeout(trTimer);
+  trTimer = setTimeout(() => applyTranslationText(), 300);
+});
+
 // ---------- Cue list ----------
 
 let shownCurrent = -2;
 
 function renderCues() {
+  const hasTranslations = state.cues.some((c) => c.tr) || !!$('trText').value.trim();
   const list = $('cueList');
   list.textContent = '';
   shownCurrent = -2;
@@ -213,6 +236,13 @@ function renderCues() {
     const li = document.createElement('li');
     const time = Object.assign(document.createElement('input'), { className: 'time', value: formatTime(cue.t), placeholder: '–:––', title: 'Start time' });
     const text = Object.assign(document.createElement('input'), { value: cue.text, placeholder: '(break – empty screen)' });
+    const tr = Object.assign(document.createElement('input'), { className: 'tr', value: cue.tr || '', placeholder: cue.text ? 'translation' : '' });
+    tr.setAttribute('aria-label', `Translation of line ${i + 1}`);
+    tr.hidden = !cue.text || !hasTranslations;
+    tr.addEventListener('input', () => { cue.tr = tr.value.trim() || undefined; });
+    const texts = document.createElement('div');
+    texts.className = 'texts';
+    texts.append(text, tr);
     const del = Object.assign(document.createElement('button'), { textContent: '×', title: 'Delete line' });
     const stamp = Object.assign(document.createElement('button'), { textContent: '⏱', className: 'stamp', title: 'Set to the current song position' });
     time.setAttribute('aria-label', `Start time of line ${i + 1}`);
@@ -242,7 +272,7 @@ function renderCues() {
       renderCues();
       refresh();
     });
-    li.append(time, text, stamp, del);
+    li.append(time, texts, stamp, del);
     list.append(li);
   });
 }
@@ -250,17 +280,41 @@ function renderCues() {
 /** Set one line's start; with "move following lines" on, later lines keep their spacing. */
 function setCueTime(cue, t) {
   const i = state.cues.indexOf(cue);
-  if (!$('ripple').checked || cue.t == null) { cue.t = Math.max(0, t); return; }
+  // Breaks only end the line before them, so moving one never moves the rest of the song.
+  if (!$('ripple').checked || cue.t == null || !cue.text) { cue.t = Math.max(0, t); return; }
   const d = retimeFrom(state.cues, i, t);
   if (Math.abs(d) >= 0.05) setStatus(`Line ${i + 1} and all lines after it moved ${d > 0 ? 'later' : 'earlier'} by ${Math.abs(d).toFixed(2)} s.`);
 }
 
+/**
+ * Add a line or break at the current song position. If the song sits at (or just after)
+ * the start of a line – e.g. after clicking that line – the new cue goes after it instead,
+ * so it never takes that line's place.
+ */
 function addCue(text) {
-  const t = state.file ? media.currentTime : null;
-  state.cues.push({ t, text });
+  let t = state.file ? media.currentTime : null;
+  let note = '';
+  if (t != null) {
+    const i = activeIndex(state.cues, t + 0.001);
+    const cur = state.cues[i];
+    if (cur && t - cur.t < 0.5) {
+      const next = state.cues.slice(i + 1).find((c) => c.t != null);
+      const words = cur.text ? cur.text.split(/\s+/).length : 0;
+      t = cur.t + Math.max(2, words * 0.6 + 1);
+      if (next) t = Math.min(t, cur.t + (next.t - cur.t) / 2);
+      note = ` after “${cur.text || 'break'}”`;
+    }
+    while (state.cues.some((c) => c.t != null && Math.abs(c.t - t) < 0.05)) t += 0.1;
+  }
+  const cue = { t, text };
+  state.cues.push(cue);
   sortCues();
   renderCues();
   refresh();
+  if (t != null) {
+    setStatus(`${text ? 'Line' : 'Break'} added at ${formatTime(t)}${note}. To place it exactly: play to the spot, pause and click ⏱ on it.`);
+    $('cueList').children[state.cues.indexOf(cue)]?.scrollIntoView({ block: 'nearest' });
+  }
 }
 $('addCue').addEventListener('click', () => addCue('New line'));
 $('addBlank').addEventListener('click', () => addCue(''));
@@ -320,7 +374,13 @@ function renderTapSections() {
 function insertSection(k) {
   const sec = state.sections[k];
   if (!state.tap || !sec) return;
-  state.cues.splice(state.tap.index, 0, ...sec.lines.map((text) => ({ t: null, text })));
+  const known = translationsOf(state.cues);
+  state.cues.splice(state.tap.index, 0, ...sec.lines.map((line) => {
+    const c = { t: null, ...splitTranslation(line) };
+    if (!c.tr && known.has(c.text)) c.tr = known.get(c.text);
+    if (!c.tr) delete c.tr;
+    return c;
+  }));
   setStatus(`${sec.label} inserted – tap its first line when it starts.`);
 }
 
@@ -421,6 +481,7 @@ $('autoSync').addEventListener('click', async () => {
     if (lines.length) {
       const cues = alignLyrics(lines, words);
       if (cues.every((c) => c.t == null)) throw new Error('The lyrics do not seem to match what is sung. Check the text or use “Tap along”.');
+      applyTranslations(cues, translationsOf(state.cues));
       state.cues = cues;
       const extra = cues.filter((c) => c.text).length - lines.length;
       setStatus(`Timing found${extra > 0 ? `, including ${extra} repeated line${extra > 1 ? 's' : ''} that the sheet lists only once` : ''}. Play it back to check – every time can be edited.`);
@@ -557,7 +618,7 @@ function frame() {
     cues: state.cues,
     lead,
     bg: { theme: $('theme').value, palette: $('palette').value, color: $('bgColor').value, custom: $('palette').value === 'custom' ? customPalette($('customA').value, $('customB').value) : null, media: state.bgMedia || (useSource ? media : null), dim: Number($('dim').value) },
-    style: { font: $('font').value, scale: Number($('scale').value), position: $('position').value, showNext: $('showNext').checked, singCue: $('singCue').checked, caps: $('caps').checked, color: $('textColor').value },
+    style: { font: $('font').value, scale: Number($('scale').value), position: $('position').value, showNext: $('showNext').checked, singCue: $('singCue').checked, caps: $('caps').checked, color: $('textColor').value, showTr: $('showTr').checked, trColor: $('trColor').value, trScale: Number($('trScale').value) },
     title: $('title').value.trim(),
     subtitle: $('subtitle').value.trim(),
   });

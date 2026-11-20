@@ -181,3 +181,38 @@ test('retimeFrom moves the line and every later line by the same amount', () => 
   retimeFrom(cues, 1, 0); // never negative
   assert.deepEqual(cues.map((c) => c.t), [1, 0, 3, 7, null]);
 });
+
+test('a break with the same time as the line before it does not hide that line', () => {
+  const cues = [{ t: 10, text: 'JESUS ich bin ganz DEIN' }, { t: 10, text: '' }, { t: 14, text: 'Öffne die Himmel' }];
+  assert.equal(activeIndex(cues, 11), 0);
+  assert.equal(activeIndex(cues, 14), 2);
+  const later = [{ t: 10, text: 'a' }, { t: 12, text: '' }];
+  assert.equal(activeIndex(later, 13), 1);
+});
+
+import { splitTranslation, pairTranslation, applyTranslations } from '../js/lyrics.js';
+
+test('inline translations with //', () => {
+  assert.deepEqual(splitTranslation('Öffne die Himmel // Open the heavens'), { text: 'Öffne die Himmel', tr: 'Open the heavens' });
+  assert.deepEqual(splitTranslation('no translation'), { text: 'no translation' });
+  assert.deepEqual(splitTranslation('http://example.com'), { text: 'http://example.com' });
+  const { cues } = parseLyrics('Chorus\nÖffne die Himmel // Open the heavens\n\nChorus');
+  assert.deepEqual(cues.map((c) => [c.text, c.tr]), [['Öffne die Himmel', 'Open the heavens'], ['Öffne die Himmel', 'Open the heavens']]);
+  assert.ok(!('tr' in parseLyrics('plain').cues[0]));
+});
+
+test('translation box is paired line by line, with labels and repeats', () => {
+  const de = 'Strophe 1\nJESUS ich bin ganz DEIN\nÖffne die Himmel\n\nRefrain\nWeite das Tor\n\nRefrain';
+  const en = 'Verse 1\nJESUS I am all Yours\nOpen the heavens\n\nChorus\nWiden the gate\n\nChorus';
+  const { map, lyricsCount, translationCount } = pairTranslation(de, en);
+  assert.equal(lyricsCount, 4); assert.equal(translationCount, 4);
+  const cues = [{ t: 1, text: 'JESUS ich bin ganz DEIN' }, { t: 3, text: '' }, { t: 5, text: 'Weite das Tor' }, { t: 9, text: 'Weite das Tor' }];
+  assert.equal(applyTranslations(cues, map), 3);
+  assert.deepEqual(cues.map((c) => c.tr), ['JESUS I am all Yours', undefined, 'Widen the gate', 'Widen the gate']);
+});
+
+test('LRC and SRT keep translations', () => {
+  const cues = [{ t: 2, text: 'Öffne die Himmel', tr: 'Open the heavens' }, { t: 6, text: 'Weite das Tor' }];
+  assert.deepEqual(parseLyrics(toLrc(cues)).cues, cues);
+  assert.match(toSrt(cues), /Öffne die Himmel\nOpen the heavens\n/);
+});
